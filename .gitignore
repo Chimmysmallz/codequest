@@ -1,0 +1,36 @@
+# --- Secrets: never upload these ---
+**/.env
+**/serviceAccountKey.json
+**/firebase-service-account.json
+*.keystore
+*.jks
+**/key.properties
+export_credentials.cfg
+
+# --- Godot ---
+game/.godot/
+game/build/
+*.apk
+*.aab
+*.ipa
+
+# --- Python ---
+**/__pycache__/
+**/.venv/
+**/.pytest_cache/
+
+# --- Flutter ---
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+
+# --- Node / Firebase ---
+**/node_modules/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# --- OS clutter ---
+.DS_Store
+Thumbs.db

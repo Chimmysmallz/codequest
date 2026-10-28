@@ -1,0 +1,99 @@
+# CodeQuest end-to-end checks.
+# Runs automatically on GitHub every time you push, and on demand from the
+# "Actions" tab (Run workflow). Four jobs run side by side:
+#   1. game     - Godot 4 opens the project and auto-plays the game test
+#   2. backend  - Python API tests + a live server smoke test
+#   3. rules    - Firestore security rules tested on the Firebase emulator
+#   4. app      - Flutter app dependencies resolve and the code analyses cleanly
+name: CodeQuest CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  game:
+    name: Game (Godot e2e play-through)
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot (headless)
+        run: |
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+          chmod +x godot
+      - name: Import art and project
+        run: timeout 180 ./godot --headless --editor --path game --quit || true
+      - name: Boot the game for 300 frames
+        run: |
+          timeout 120 ./godot --headless --path game --quit-after 300 2>&1 | tee boot.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load" boot.log; then echo "Game boot produced errors"; exit 1; fi
+      - name: Automated play-through
+        run: |
+          timeout 180 ./godot --headless --path game --script res://tests/e2e_test.gd 2>&1 | tee e2e.log
+          grep -q "E2E PASS" e2e.log
+
+  backend:
+    name: Backend (API tests + live smoke test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: API tests
+        run: python -m pytest
+      - name: Start server and run live smoke test
+        env:
+          AUTH_MODE: insecure_dev
+          SANDBOX_MODE: subprocess
+        run: |
+          uvicorn main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/health && break; sleep 1; done
+          python ../scripts/e2e_smoke.py --url http://127.0.0.1:8000
+      - name: Build the Docker sandbox image
+        run: docker build -t codequest-sandbox ./sandbox
+
+  rules:
+    name: Firestore security rules (emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install Firebase tools and test packages
+        run: |
+          npm i -g firebase-tools
+          npm i --prefix firebase-tests
+      - name: Run rules tests on the emulator
+        run: firebase emulators:exec --only firestore --project demo-codequest "npm --prefix firebase-tests test"
+
+  app:
+    name: Flutter app (dependencies + analysis)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Get packages
+        run: flutter pub get
+      - name: Analyse code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings

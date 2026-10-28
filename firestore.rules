@@ -1,0 +1,41 @@
+rules_version = '2';
+
+// CodeQuest Firestore security rules.
+// The whole point: a signed-in user can read and write ONLY their own
+// progress document, and nothing else is accessible. This is your data lock.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Per-user progress: users/{uid}
+    match /users/{userId} {
+      // Only the owner (same Firebase uid) may read or write their doc.
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+
+      // Optional hardening (uncomment to enforce shape/limits on writes):
+      // allow write: if request.auth != null
+      //   && request.auth.uid == userId
+      //   && request.resource.data.xp is int
+      //   && request.resource.data.coins is int
+      //   && request.resource.data.completed is list;
+    }
+
+    // Public leaderboard: leaderboard/{uid}
+    match /leaderboard/{userId} {
+      // Any signed-in player can read the whole board (to see the rankings).
+      allow read: if request.auth != null;
+      // A player can create/update ONLY their own entry.
+      allow write: if request.auth != null
+                   && request.auth.uid == userId;
+      // Note: entries are client-written, so a determined user could inflate
+      // their own XP. For a tamper-proof board, have the backend write these
+      // via the Firebase Admin SDK after verifying the code passed.
+    }
+
+    // Everything else is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,36 @@
+# CodeQuest backend — the stateless API service.
+#
+#   docker compose up --build    # build and run the API
+#
+# There is no database: accounts and progress live in Firebase/Firestore, and
+# the API authenticates callers by verifying Firebase ID tokens. SANDBOX_MODE
+# is left at "subprocess" here for simplicity; see the note under the `api`
+# service for how to enable the hardened Docker sandbox in a real deployment.
+
+services:
+  api:
+    build: .
+    environment:
+      # --- Firebase auth --------------------------------------------------
+      # "firebase" verifies real ID tokens; "insecure_dev" bypasses auth
+      # (DEV ONLY — never in production).
+      AUTH_MODE: firebase
+      # Path INSIDE the container to a mounted service-account JSON. Provide
+      # the file via the bind mount below (see `volumes`). The Firebase Admin
+      # SDK reads it to verify ID tokens.
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+      # Optional: pin the Firebase project id (usually inferred from the key).
+      # FIREBASE_PROJECT_ID: your-firebase-project-id
+      # --- Code sandbox ---------------------------------------------------
+      # Keep the simple runner inside compose. To run the HARDENED Docker
+      # sandbox you must give this container access to a Docker daemon (e.g.
+      # bind-mount /var/run/docker.sock and pre-build the codequest-sandbox
+      # image) and then set SANDBOX_MODE: docker.
+      SANDBOX_MODE: subprocess
+    volumes:
+      # Mount your Firebase service-account JSON read-only into the container
+      # at the path referenced by GOOGLE_APPLICATION_CREDENTIALS above.
+      # Replace ./firebase-service-account.json with your local key file.
+      - ./firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+    ports:
+      - "8000:8000"

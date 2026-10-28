@@ -1,0 +1,14 @@
+# CodeQuest backend dependencies.
+# The backend is a stateless code-execution + answer-checking microservice.
+# It holds no database and no accounts — callers are authenticated with
+# Firebase ID tokens (verified via firebase-admin). Accounts and progress
+# live in Firebase Auth + Cloud Firestore, owned by the app.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# Firebase Admin SDK — verifies incoming Firebase ID tokens.
+firebase-admin==6.6.0
